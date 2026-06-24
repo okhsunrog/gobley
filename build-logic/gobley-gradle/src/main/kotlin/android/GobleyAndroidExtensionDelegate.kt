@@ -43,6 +43,23 @@ interface GobleyAndroidExtensionDelegate {
     )
 
     /**
+     * Registers an AGP `onVariants` callback that wires a generated source
+     * directory into every variant. Unlike [addGeneratedBindingsDirectory] this
+     * is safe to call during the plugin's configuration phase: AGP 9 forbids
+     * registering `onVariants` from `afterEvaluate`. The producing task is
+     * resolved lazily by [taskName] inside the callback, so it only needs to
+     * exist by the time AGP fires the variant callbacks (after `afterEvaluate`).
+     * [shouldAdd] is evaluated inside the callback so callers can defer the
+     * decision until the build is fully configured.
+     */
+    fun addGeneratedJavaSourcesForEachVariant(
+        project: Project,
+        taskName: String,
+        shouldAdd: () -> Boolean,
+        outputDir: (Task) -> DirectoryProperty,
+    )
+
+    /**
      * Provides a safe hook into Android's build variants (e.g., debug, release).
      * Used primarily to map and inject compiled native Rust binaries (JNI libs)
      * into the corresponding main and test APKs.

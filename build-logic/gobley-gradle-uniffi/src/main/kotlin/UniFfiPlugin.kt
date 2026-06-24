@@ -68,12 +68,32 @@ class UniFfiPlugin : Plugin<Project> {
     @OptIn(InternalGobleyGradleApi::class)
     private var androidDelegate: GobleyAndroidExtensionDelegate? = null
 
+    @OptIn(InternalGobleyGradleApi::class)
     override fun apply(target: Project) {
-        @OptIn(InternalGobleyGradleApi::class)
         if (!target.plugins.hasPlugin(PluginIds.GOBLEY_RUST)) {
             DependencyUtils.createUniFfiConfigurations(target)
         }
         uniFfiExtension = target.extensions.create<UniFfiExtension>(TASK_GROUP, target)
+        // AGP 9 forbids registering onVariants() from afterEvaluate (where the
+        // rest of this plugin runs). Register the generated-bindings source
+        // wiring here, during configuration. The buildUniffiBindings task is
+        // created later in afterEvaluate — before AGP fires the variant
+        // callbacks — so resolving it lazily by name inside the callback is safe.
+        // Only the pure-Android path needs this (KMP routes sources via KGP),
+        // hence the deferred shouldAdd guard.
+        PluginUtils.withAndroidPlugin(target) { delegate ->
+            // Pre-register the task during configuration so AGP's onVariants
+            // callback can resolve it by name. It is fully configured later by
+            // configureBindingTasks() in afterEvaluate, before AGP reads its
+            // outputs.
+            target.registerOrGetBuildBindings()
+            delegate.addGeneratedJavaSourcesForEachVariant(
+                project = target,
+                taskName = "buildUniffiBindings",
+                shouldAdd = { kotlinExtensionDelegate == null },
+                outputDir = { (it as BuildUniffiBindingsTask).mainOutputDir },
+            )
+        }
         target.afterEvaluate {
             applyAfterEvaluate(this)
         }
@@ -155,6 +175,19 @@ class UniFfiPlugin : Plugin<Project> {
             project.logger.warn("WASM targets are added, but the UniFFI plugin does not support WASM targets yet.")
         }
     }
+
+    /**
+     * The build-bindings task may be pre-registered during the configuration
+     * phase (see [apply]) so AGP's `onVariants` callbacks can resolve it before
+     * gobley's own `afterEvaluate` runs. Register it lazily if that hasn't
+     * happened yet; otherwise reuse the existing registration.
+     */
+    private fun Project.registerOrGetBuildBindings(): TaskProvider<BuildUniffiBindingsTask> =
+        if (tasks.names.contains("buildUniffiBindings")) {
+            tasks.named<BuildUniffiBindingsTask>("buildUniffiBindings")
+        } else {
+            tasks.register<BuildUniffiBindingsTask>("buildUniffiBindings")
+        }
 
     private fun Project.configureBindingTasks(): TaskProvider<BuildUniffiBindingsTask> {
         val bindingsGeneration = bindingsGeneration
@@ -303,7 +336,8 @@ class UniFfiPlugin : Plugin<Project> {
         @OptIn(InternalGobleyGradleApi::class)
         DependencyUtils.addMergedUniffiConfigArtifact(this, mergeUniffiConfig)
 
-        val buildBindings = tasks.register<BuildUniffiBindingsTask>("buildUniffiBindings") {
+        val buildBindings = registerOrGetBuildBindings()
+        buildBindings.configure {
             group = TASK_GROUP
 
             cargoPackage.set(cargoExtension.cargoPackage)
@@ -437,11 +471,10 @@ class UniFfiPlugin : Plugin<Project> {
             with(kotlinExtensionDelegate!!.sourceSets.commonMain) {
                 kotlin.srcDir(targetSourceCollection)
             }
-        } else if (androidDelegate != null) {
-            androidDelegate!!.addGeneratedBindingsDirectory(project, buildBindings) { task ->
-                task.mainOutputDir
-            }
         }
+        // The Android generated-source wiring is registered in apply() via
+        // addGeneratedJavaSourcesForEachVariant — AGP 9 rejects onVariants() here
+        // (this runs in afterEvaluate).
 
         if (uniFfiExtension.addDependencies.get()) {
             if (kotlinExtensionDelegate != null) {

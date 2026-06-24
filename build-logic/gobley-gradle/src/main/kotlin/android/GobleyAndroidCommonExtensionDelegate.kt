@@ -59,6 +59,19 @@ class GobleyAndroidCommonExtensionDelegate(
         }
     }
 
+    override fun addGeneratedJavaSourcesForEachVariant(
+        project: Project,
+        taskName: String,
+        shouldAdd: () -> Boolean,
+        outputDir: (Task) -> DirectoryProperty,
+    ) {
+        androidComponents.onVariants { variant ->
+            if (!shouldAdd()) return@onVariants
+            val taskProvider = project.tasks.named(taskName)
+            variant.sources.java?.addGeneratedSourceDirectory(taskProvider, outputDir)
+        }
+    }
+
     override fun addProguardFiles(
         project: Project,
         proguardFileProvider: Provider<RegularFile>,

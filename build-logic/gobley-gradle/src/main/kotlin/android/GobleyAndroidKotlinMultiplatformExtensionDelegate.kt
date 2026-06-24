@@ -60,6 +60,15 @@ class GobleyAndroidKotlinMultiplatformExtensionDelegate(
         // Intentionally empty: KGP handles source routing in KMP
     }
 
+    override fun addGeneratedJavaSourcesForEachVariant(
+        project: Project,
+        taskName: String,
+        shouldAdd: () -> Boolean,
+        outputDir: (Task) -> DirectoryProperty,
+    ) {
+        // Intentionally empty: KGP handles source routing in KMP
+    }
+
     override fun onVariants(
         project: Project,
         action: OnVariantAction,
