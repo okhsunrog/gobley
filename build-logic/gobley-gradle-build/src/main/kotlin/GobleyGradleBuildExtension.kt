@@ -67,7 +67,10 @@ private fun Project.configureProjectProperties(
         ).asFile
     )
     group = "dev.gobley.gradle"
-    version = when {
+    // Allow overriding the published version (e.g. for a downstream fork) via
+    // -Pgobley.publishVersion=... so it doesn't collide with upstream releases.
+    version = (findProperty("gobley.publishVersion") as? String)?.takeIf { it.isNotBlank() }
+        ?: when {
         bindgenManifest.version.contains('-') -> bindgenManifest.version.substringBefore('-') + "-SNAPSHOT"
         else -> bindgenManifest.version
     }
