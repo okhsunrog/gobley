@@ -1,0 +1,12 @@
+jdk:
+  - openjdk21
+install:
+  - ./gradlew
+      :build-logic:gobley-gradle:publishToMavenLocal
+      :build-logic:gobley-gradle-rust:publishToMavenLocal
+      :build-logic:gobley-gradle-cargo:publishToMavenLocal
+      :build-logic:gobley-gradle-uniffi:publishToMavenLocal
+      --no-configuration-cache
+      -Pgobley.projects.gradleTests=false
+      -Pgobley.projects.uniffiTests=false
+      -Pgobley.projects.examples=false
